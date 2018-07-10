@@ -418,6 +418,75 @@ bool BKZReduction<ZT, FT>::tour(const int loop, int &kappa_max, const BKZParam &
   return false;
 }
 
+
+template <class ZT, class FT>
+double BKZReduction<ZT, FT>::get_cost(const BKZParam &par, int start, int end, int bs, double *l, long *preproc_cost)
+{
+
+  // for local block
+  double logdet;
+
+  // for obtaining GSO
+  FT r0;
+  FP_NR<mpfr_t> fr0;
+  long expo;
+
+  // for pruner
+  double GH_0;
+  double radius = 0;
+
+  // for output
+  FT f, log_f;
+  stringstream ss;
+
+  // for computing enumeration coset
+  double estimate_cost = 0;
+  double probability = 0;
+
+  // for storing log gso norm of current local block 
+  vector<double> r;
+
+  // get GSO from start to end-1
+  m.update_gso();
+  for (int i = start; i < end; i++)
+    {
+      f = m.get_r_exp(i, i, expo);
+      log_f.log(f, GMP_RNDU);
+      l[i-start] = log_f.get_d() + expo * std::log(2.0);
+      r.push_back(std::exp(l[i-start]));
+    }
+
+  // compute the log-determinant of the middle block
+  logdet = 0;
+  for (int i = start; i < end; i++)
+    {
+      logdet += l[i-start]/2;
+    }
+
+  // compute the Gaussian heuristic value of the first minimum of middle block
+  GH_0 = logdet/bs + c_100[bs-1];
+
+  // setup the searching radius for enumeration
+  radius = std::exp(GH_0*2);
+
+  // call prun to compute enumeration time
+  // TODO: to be more precise, a simulated BKZ tour is needed before this estimation on enumeration cost in the middle block
+  PruningParams pruning = get_pruning(start, bs, par);
+  prune<FT>(pruning, radius, preproc_cost[bs-1], r, 0.01, PRUNER_METRIC_PROBABILITY_OF_SHORTEST, PRUNER_START_FROM_INPUT);
+
+  estimate_cost = 0;
+  for (int i = 0; i < pruning.detailed_cost.size(); i++)
+    {
+      estimate_cost += pruning.detailed_cost[i];
+    }
+
+  probability = pruning.expectation;
+  r.clear();
+  
+  return estimate_cost*2/probability;  
+}
+
+
 template <class ZT, class FT>
 bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int min_row, int max_row)
 {
@@ -425,49 +494,27 @@ bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int m
   int expindex = 0;
 
   // used for adapted head
-  double expenumtime = 0;	
+  double expenumtime = 0;
   long *preproc_cost = new long[200];  
   double *l = new double[max_row-min_row];
 
   if ( (par.flags & BKZ_DUMP_GSO) && (record_tour > 0) ) // skip first tour: rerandomization introduces random gso
     {
-      /* Compute (prun-)enumeration time on middle block */
+        // Compute (prun-)enumeration time on middle block
         int block_size = par.block_size;
 
-	// use local variables (global variables lead to some unsolved problems) 
+	// use local variables (global variables lead to some unsolved problems)
+	long n;	
 	int bs;
 	int start;
 	int end;
-	double logdet;
-	double GH_0;
-	long n;
-
-	// for obtaining GSO
-	FT r0;
-	FP_NR<mpfr_t> fr0;
-	long expo;
-
-	// for pruner
-	double radius = 0;
-
-	// for output
-	FT f, log_f;
-	stringstream ss;
 
 	// setup dimension and blocksize
 	n = max_row - min_row;
 	bs = par.block_size;
 
-	// for computing enumeration coset
-	double total_cost = 0;
-	double estimate_cost = 0;
-	double probability = 0;
-
-	// for storing log gso norm of current local block 
-	vector<double> r;
-	
 	// we don't use the real preprocessing cost as we don't know it, we always set it to be 1 second; we hope that this will not destroy the relation between the real enumeration costs in any local block in head region and in the middle block
-	// But we still keep it for later improvement
+	// Here we keep it for later improvement
 	for (int i = 0; i < 60; i++)
 	  {
 	    preproc_cost[i] = pow(2,29);
@@ -490,44 +537,9 @@ bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int m
 	start = expindex;
 	end = start + bs;
 
-	// get GSO from start to end-1
-	m.update_gso();
-	for (int i = start; i < end; i++)
-	  {
-	    f = m.get_r_exp(i, i, expo);
-	    log_f.log(f, GMP_RNDU);
-	    l[i-start] = log_f.get_d() + expo * std::log(2.0);
-	    r.push_back(std::exp(l[i-start]));
-	  }
-
-	// compute the log-determinant of the middle block
-	logdet = 0;
-	for (int i = start; i < end; i++)
-	  {
-	    logdet += l[i-start]/2;
-	  }
-
-	// compute the Gaussian heuristic value of the first minimum of middle block
-	GH_0 = logdet/bs + c_100[bs-1];
-
-	// setup the searching radius for enumeration
-	radius = std::exp(GH_0*2);
-
-	// call prun to compute enumeration time
-	// TODO: to be more precise, a simulated BKZ tour is needed before this estimation on enumeration cost in the middle block
-	PruningParams pruning = get_pruning(start, bs, par);
-	prune<FT>(pruning, radius, preproc_cost[bs-1], r, 0.01, PRUNER_METRIC_PROBABILITY_OF_SHORTEST, PRUNER_START_FROM_INPUT);
-
-	estimate_cost = 0;
-	for (int i = 0; i < pruning.detailed_cost.size(); i++)
-	  {
-	    estimate_cost += pruning.detailed_cost[i];
-	  }
-
-	probability = pruning.expectation;
-	expenumtime = estimate_cost*2/probability;
-
-	r.clear();
+	// get cost
+	expenumtime = get_cost(par, start, end, bs, l, preproc_cost);
+	cerr << expenumtime << endl;
     }
 
   for (int kappa = min_row; kappa <= max_row - par.block_size; ++kappa)
@@ -536,6 +548,7 @@ bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int m
       long n;
       int bs;	    
 
+      // for else use
       n = max_row - min_row;
       bs = par.block_size;
 
@@ -543,35 +556,15 @@ bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int m
 	{
 	  int block_size = par.block_size;
 
-	  // I am repeating the announcement of variables above
-	  /* *************************************** */	  
+	  // Compute (prun-)enumeration time on current block (in head region)
 	  // use local variables (global variables lead to some unsolved problems)
 	  int start;
 	  int end;
-	  double logdet;
-	  double GH_0;
-
-	  // for obtaining GSO
-	  FT r0;
-	  FP_NR<mpfr_t> fr0;
-	  long expo;
-
-	  // for pruner
-	  double radius = 0;
-
-	  // for output
-	  FT f, log_f;
-	  stringstream ss;
+	  double total_cost;
 
 	  // dimension and blocksize
 	  n = max_row - min_row;
 	  bs = par.block_size;
-
-	  // for enumeration cost
-	  double total_cost = 0;
-	  double estimate_cost = 0;
-	  double probability = 0;
-	  /* *************************************** */
 
 	  // setup for current local block
 	  bs = block_size;
@@ -580,48 +573,8 @@ bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int m
 	  
 	  while (true) // until enumeration cost in current local block is no less than the one in middle block 
 	    {
-	      // I am repeating code above, there is a wired bug when this code is organized as an independent function
-	      /* *************************************** */
-	      vector<double> r_real;
-
-	      // get current local block with adaptive blocksize
-	      m.update_gso();
-	      for (int i = start; i < end; i++)
-		{
-		  f = m.get_r_exp(i, i, expo);
-		  log_f.log(f, GMP_RNDU);
-		  l[i-start] = log_f.get_d() + expo * std::log(2.0);
-		  r_real.push_back(std::exp(l[i-start]));
-		}
-
-	      // compute log-determinant
-	      logdet = 0;
-	      for (int i = start; i < end; i++)
-		{
-		  logdet += l[i-start]/2;
-		}
-
-	      // compute the estimated first minimum by Gaussian heuristic
-	      GH_0 = logdet/bs + c_100[bs-1];
-	      radius = std::exp(GH_0*2);
-
-	      // call prun to compute enumeration cost
-	      // TODO: same as the case of middel block
-	      PruningParams pruning = get_pruning(start, bs, par);
-	      prune<FT>(pruning, radius, preproc_cost[bs-1], r_real, 0.01, PRUNER_METRIC_PROBABILITY_OF_SHORTEST, PRUNER_START_FROM_INPUT);
-
-	      r_real.clear();
-	      
-	      estimate_cost = 0;
-	      total_cost = 0;
-	      for (int i = 0; i < pruning.detailed_cost.size(); i++)
-		{
-		  estimate_cost += pruning.detailed_cost[i];
-		}
-
-	      probability = pruning.expectation;
-	      total_cost = estimate_cost*2/probability;
-	      /* *************************************** */
+	      // get_cost
+	      total_cost = get_cost(par, start, end, bs, l, preproc_cost);
 	      
 	      // if cost in current block is less than cost in the middle block, adaptively increase size of current block
 	      if (total_cost < expenumtime)

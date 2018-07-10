@@ -183,7 +183,7 @@ public:
    *    false if it made progress, true otherwise
    */
   bool tour(const int loop, int &kappa_max, const BKZParam &param, int min_row, int max_row);
-
+  
   /**
    * @brief Runs a SD-BKZ tour.
    *
@@ -315,7 +315,12 @@ private:
   // a truncated dual tour: dual svp reducing from max_row to min_row without decreasing
   // the window size (simply returns when the first block is reduced)
   bool trunc_dtour(const BKZParam &param, int min_row, int max_row);
+  // Call pruner on current local block to estimate enumeration time for finding a vector
+  // with norm within a given radius.
+  // returns the estimated cost of enumeration in current local block (in #nodes)
+  double get_cost(const BKZParam &par, int start=0, int end=0, int bs=0, double *l=NULL, long *preproc_cost=NULL);
 
+  
   const BKZParam &param;
   int num_rows;
   MatGSO<ZT, FT> &m;
