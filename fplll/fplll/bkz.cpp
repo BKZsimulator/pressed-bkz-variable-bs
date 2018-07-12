@@ -365,11 +365,6 @@ bool BKZReduction<ZT, FT>::tour(const int loop, int &kappa_max, const BKZParam &
 {
   bool clean = true;
   
-  FT r0;
-  FP_NR<mpfr_t> fr0;
-  long expo;
-  FT f, log_f;
-
   if (par.flags & BKZ_DUMP_GSO)
     {
       if (head >= m.d - par.block_size)
