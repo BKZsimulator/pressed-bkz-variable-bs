@@ -579,9 +579,9 @@ bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int m
 	      // if cost in current block is less than cost in the middle block, adaptively increase size of current block
 	      if (total_cost < expenumtime)
 		{
-		  if (end + 3 < start + n) // each adjustment on blocksize -- addded by 3
+		  if (end + 1 < start + n) // each time added by 1 (to be conservative)
 		    {
-		      end = end + 3;
+		      end = end + 1;
 		      bs = end - start;
 		    }
 		  else
@@ -591,7 +591,6 @@ bool BKZReduction<ZT, FT>::trunc_tour(int &kappa_max, const BKZParam &par, int m
 		}
 	      else
 		{
-		  //cerr << "current blocksize: " << bs << " time: " << total_cost << endl;
 		  break;
 		}
 	  
