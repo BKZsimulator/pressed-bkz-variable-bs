@@ -107,7 +107,7 @@ bool BKZReduction<ZT, FT>::svp_preprocessing(int kappa, int block_size, const BK
 
   FPLLL_DEBUG_CHECK(param.strategies.size() > block_size);
 
-  int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : 0;
+  int lll_start = (param.flags & BKZ_BOUNDED_LLL) ? kappa : head; // freeze [0,head]
   if (!lll_obj.lll(lll_start, lll_start, kappa + block_size, 0))
   {
     throw std::runtime_error(RED_STATUS_STR[lll_obj.status]);
